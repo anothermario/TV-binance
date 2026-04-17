@@ -48,7 +48,8 @@ def round_take_profit_price(symbol, price):
                 if tick_size > 0:
                     rounded = Decimal(str(price)).quantize(tick_size, rounding=ROUND_DOWN)
                     return format(rounded, "f")
-    return "{:.2f}".format(price)
+    logger.error("Unable to determine price precision for symbol %s", symbol)
+    raise LookupError(f"Unable to determine price precision for {symbol}")
 
 
 @app.route("/", methods=["GET"])
@@ -73,7 +74,7 @@ def webhook():
         )
 
     # 1. Verification
-    if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE or ""):
+    if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE):
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
     try:
@@ -101,8 +102,11 @@ def webhook():
 
         # 3. Calculate 2% Take Profit
         fills = buy_order.get("fills") or []
-        if not fills or "price" not in fills[0]:
+        if not fills:
             logger.error("Buy order missing fill price: %s", buy_order)
+            return jsonify({"status": "error", "message": "Buy order fills unavailable"}), 502
+        if "price" not in fills[0]:
+            logger.error("Buy order fill missing price field: %s", buy_order)
             return jsonify({"status": "error", "message": "Buy order fill price unavailable"}), 502
 
         fill_price = float(fills[0]["price"])
@@ -123,9 +127,12 @@ def webhook():
 
         return jsonify({"status": "success", "buy": fill_price, "tp": tp_price_rounded}), 200
 
+    except LookupError as error:
+        logger.exception("Price precision lookup failed: %s", error)
+        return jsonify({"status": "error", "message": "Unable to determine valid price precision"}), 502
     except BinanceAPIException as error:
         logger.exception("Binance API error while processing webhook")
-        return jsonify({"status": "error", "message": "Binance API error", "code": error.code}), 400
+        return jsonify({"status": "error", "message": "Binance API error"}), 400
     except Exception as error:
         logger.exception("Unexpected webhook error: %s", error)
         return jsonify({"status": "error", "message": "Internal error"}), 500
