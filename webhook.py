@@ -1,123 +1,148 @@
 import hmac
-import json
 import logging
 import os
-import sys
+from decimal import Decimal, ROUND_DOWN
 
+from flask import Flask, jsonify, request
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from flask import Flask, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("BINANCE_API_KEY", "")
-API_SECRET = os.environ.get("BINANCE_API_SECRET", "")
-PASSPHRASE = os.environ.get("WEBHOOK_PASSPHRASE", "")
-TAKE_PROFIT_PCT = float(os.environ.get("TAKE_PROFIT_PCT", "2.0"))
+# --- Load Environment Variables ---
+API_KEY = os.getenv("BINANCE_API_KEY")
+API_SECRET = os.getenv("BINANCE_API_SECRET")
+WEBHOOK_PASSPHRASE = os.getenv("WEBHOOK_PASSPHRASE")
 
-# Validate required configuration at startup so the server fails fast
-_missing = [name for name, val in [
-    ("BINANCE_API_KEY", API_KEY),
-    ("BINANCE_API_SECRET", API_SECRET),
-    ("WEBHOOK_PASSPHRASE", PASSPHRASE),
-] if not val]
-if _missing:
-    sys.exit(f"ERROR: Missing required environment variables: {', '.join(_missing)}")
-
-_client = None
+client = None
+symbol_info_cache = {}
 
 
 def get_client():
-    global _client
-    if _client is None:
-        _client = Client(API_KEY, API_SECRET)
-    return _client
+    global client
+    if client is None:
+        client = Client(API_KEY, API_SECRET)
+    return client
+
+
+def get_missing_env_vars():
+    return [
+        name
+        for name, value in (
+            ("BINANCE_API_KEY", API_KEY),
+            ("BINANCE_API_SECRET", API_SECRET),
+            ("WEBHOOK_PASSPHRASE", WEBHOOK_PASSPHRASE),
+        )
+        if not value
+    ]
+
+
+def round_take_profit_price(symbol, price):
+    symbol_info = symbol_info_cache.get(symbol)
+    if symbol_info is None:
+        symbol_info = get_client().get_symbol_info(symbol)
+        symbol_info_cache[symbol] = symbol_info
+    if symbol_info:
+        for rule in symbol_info.get("filters", []):
+            if rule.get("filterType") == "PRICE_FILTER":
+                tick_size = Decimal(rule["tickSize"])
+                if tick_size > 0:
+                    rounded = Decimal(str(price)).quantize(tick_size, rounding=ROUND_DOWN)
+                    return format(rounded, "f")
+    raise LookupError(f"Unable to determine price precision for {symbol}")
+
+
+@app.route("/", methods=["GET"])
+def health_check():
+    return "Bot is running", 200
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    data = request.get_json(silent=True)
+
+    missing_env = get_missing_env_vars()
+    missing_binance_env = [name for name in missing_env if name != "WEBHOOK_PASSPHRASE"]
+    if "WEBHOOK_PASSPHRASE" in missing_env:
+        logger.error("Missing required webhook configuration")
+        return jsonify({"status": "error", "message": "Server configuration error"}), 500
+
+    # 1. Verification
+    if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE):
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    if missing_binance_env:
+        logger.error("Missing required Binance configuration")
+        return jsonify({"status": "error", "message": "Server configuration error"}), 500
+
     try:
-        data = json.loads(request.data)
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning("Invalid JSON payload: %s", exc)
-        return "Bad Request", 400
+        symbol = data.get("symbol")
+        quantity = data.get("quantity")
 
-    # Constant-time passphrase check to prevent timing attacks
-    received = data.get("passphrase", "")
-    if not hmac.compare_digest(received, PASSPHRASE):
-        logger.warning("Unauthorized webhook attempt")
-        return "Unauthorized", 401
+        if not symbol:
+            return jsonify({"status": "error", "message": "Missing symbol"}), 400
+        if quantity is None:
+            return jsonify({"status": "error", "message": "Missing quantity"}), 400
 
-    symbol = data.get("symbol")
-    side = data.get("side", "buy").upper()
-    quantity = data.get("quantity")
-
-    if not symbol:
-        return "Missing symbol", 400
-    if quantity is None:
-        return "Missing quantity", 400
-    try:
-        quantity = float(quantity)
+        symbol = symbol.upper()
+        try:
+            quantity = float(quantity)
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "Invalid quantity"}), 400
         if quantity <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        return "quantity must be a positive number", 400
+            return jsonify({"status": "error", "message": "Invalid quantity"}), 400
 
-    binance_client = get_client()
+        # 2. Execute Market Buy
+        binance_client = get_client()
+        buy_order = binance_client.create_order(
+            symbol=symbol,
+            side="BUY",
+            type="MARKET",
+            quantity=quantity,
+        )
 
-    try:
-        if side == "BUY":
-            buy_order = binance_client.create_order(
-                symbol=symbol,
-                side=Client.SIDE_BUY,
-                type=Client.ORDER_TYPE_MARKET,
-                quantity=quantity,
-            )
-            logger.info("Buy order executed: %s", buy_order)
+        # 3. Calculate 2% Take Profit
+        fills = buy_order.get("fills") or []
+        fill = fills[0] if fills else {}
+        fill_price_value = fill.get("price")
+        if fill_price_value is None:
+            logger.error("Buy order fill missing price field: %s", buy_order)
+            return jsonify({"status": "error", "message": "Invalid order response from exchange"}), 500
 
-            fills = buy_order.get("fills", [])
-            if not fills:
-                logger.error("No fills in buy order response: %s", buy_order)
-                return "Order placed but fill data unavailable", 500
-            fill_price = float(fills[0]["price"])
-            # Use 8 decimal places to accommodate Binance precision rules
-            tp_price = round(fill_price * (1 + TAKE_PROFIT_PCT / 100), 8)
+        fill_price = float(fill_price_value)
+        # TradingView alerts in this project always target a fixed 2% take-profit.
+        tp_price = fill_price * 1.02
 
-            sell_order = binance_client.create_order(
-                symbol=symbol,
-                side=Client.SIDE_SELL,
-                type=Client.ORDER_TYPE_LIMIT,
-                timeInForce=Client.TIME_IN_FORCE_GTC,
-                quantity=quantity,
-                price=str(tp_price),
-            )
-            logger.info("Limit sell placed at %s: %s", tp_price, sell_order)
+        # Binance is strict with decimal places.
+        tp_price_rounded = round_take_profit_price(symbol, tp_price)
 
-        elif side == "SELL":
-            sell_order = binance_client.create_order(
-                symbol=symbol,
-                side=Client.SIDE_SELL,
-                type=Client.ORDER_TYPE_MARKET,
-                quantity=quantity,
-            )
-            logger.info("Sell order executed: %s", sell_order)
+        # 4. Place Limit Sell
+        binance_client.create_order(
+            symbol=symbol,
+            side="SELL",
+            type="LIMIT",
+            timeInForce="GTC",
+            quantity=quantity,
+            price=tp_price_rounded,
+        )
 
-        else:
-            return "Invalid side", 400
+        return jsonify({"status": "success", "buy": fill_price, "tp": tp_price_rounded}), 200
 
-    except BinanceAPIException as exc:
-        logger.error("Binance API error: %s", exc)
-        return "Order failed: Binance API error", 400
-    except Exception as exc:
-        logger.error("Unexpected error: %s", exc)
-        return "Internal server error", 500
-
-    return "Success", 200
+    except LookupError as error:
+        logger.exception("Price precision lookup failed")
+        return jsonify({"status": "error", "message": "Unable to determine valid price precision"}), 500
+    except BinanceAPIException as error:
+        logger.exception("Binance API error while processing webhook")
+        return jsonify({"status": "error", "message": "Binance API error"}), 400
+    except Exception as error:
+        logger.exception("Unexpected webhook error")
+        return jsonify({"status": "error", "message": "Internal error"}), 500
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # For local testing; Render uses Gunicorn
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)

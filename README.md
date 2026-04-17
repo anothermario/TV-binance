@@ -2,8 +2,8 @@
 
 A lightweight webhook bridge that forwards TradingView alerts to Binance.
 When a TradingView alert fires, the bridge executes a **market buy** on Binance
-and immediately places a **limit sell** at a configurable take-profit percentage
-above the fill price.
+and immediately places a **limit sell** at a fixed 2% take-profit above the
+fill price.
 
 ---
 
@@ -16,7 +16,7 @@ TradingView alert  ──POST /webhook──►  Flask server  ──►  Binanc
 1. You configure a TradingView alert whose "Message" body is a JSON payload.
 2. TradingView sends an HTTP POST to your server's `/webhook` endpoint.
 3. The bridge validates the passphrase, executes the market buy, then places
-   a GTC limit sell at `fill_price × (1 + TAKE_PROFIT_PCT / 100)`.
+   a GTC limit sell at `fill_price × 1.02`.
 
 ---
 
@@ -51,8 +51,7 @@ cp .env.example .env
 | `BINANCE_API_KEY` | Binance API key | *(required)* |
 | `BINANCE_API_SECRET` | Binance API secret | *(required)* |
 | `WEBHOOK_PASSPHRASE` | Secret phrase shared with TradingView | *(required)* |
-| `TAKE_PROFIT_PCT` | Take-profit % above fill price | `2.0` |
-| `PORT` | Port the server listens on | `5000` |
+| `PORT` | Port the server listens on | `10000` |
 
 ### 3 — Run the server
 
@@ -66,7 +65,7 @@ For production use a WSGI server such as **gunicorn**:
 
 ```bash
 pip install gunicorn
-gunicorn webhook:app --bind 0.0.0.0:5000
+gunicorn --bind 0.0.0.0:10000 webhook:app
 ```
 
 ---
@@ -85,23 +84,32 @@ Set the **Message** body to:
 {
     "passphrase": "MY_SECRET_PHRASE",
     "symbol": "{{ticker}}",
-    "side": "buy",
     "quantity": 0.001
 }
 ```
 
 - `passphrase` — must match `WEBHOOK_PASSPHRASE` in your `.env`
 - `symbol` — the Binance trading pair (e.g. `BTCUSDT`); `{{ticker}}` fills it automatically
-- `side` — `"buy"` executes a market buy + limit sell; `"sell"` executes a market sell
 - `quantity` — exact base-asset quantity to trade
+
+---
+
+## Render deployment
+
+- Use `GET /` as the health check endpoint so Render can confirm the service is up.
+- Start the app with:
+
+```bash
+gunicorn --bind 0.0.0.0:10000 webhook:app
+```
 
 ---
 
 ## Security notes
 
 - **Never** commit your `.env` file — it is listed in `.gitignore`.
-- The passphrase is checked with a constant-time comparison (`hmac.compare_digest`)
-  to prevent timing attacks.
+- The webhook passphrase is checked with a constant-time comparison to reduce
+  timing-attack risk.
 - Restrict your Binance API key to **Spot trading only** and whitelist your
   server's IP address in the Binance API settings.
 
