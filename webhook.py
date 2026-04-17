@@ -48,7 +48,6 @@ def round_take_profit_price(symbol, price):
                 if tick_size > 0:
                     rounded = Decimal(str(price)).quantize(tick_size, rounding=ROUND_DOWN)
                     return format(rounded, "f")
-    logger.error("Unable to determine price precision for symbol %s", symbol)
     raise LookupError(f"Unable to determine price precision for {symbol}")
 
 
@@ -103,13 +102,14 @@ def webhook():
         # 3. Calculate 2% Take Profit
         fills = buy_order.get("fills") or []
         if not fills:
-            logger.error("Buy order missing fill price: %s", buy_order)
-            return jsonify({"status": "error", "message": "Buy order fills unavailable"}), 502
+            logger.error("Buy order returned no fill data: %s", buy_order)
+            return jsonify({"status": "error", "message": "No fill data returned"}), 502
         if "price" not in fills[0]:
             logger.error("Buy order fill missing price field: %s", buy_order)
-            return jsonify({"status": "error", "message": "Buy order fill price unavailable"}), 502
+            return jsonify({"status": "error", "message": "Fill data missing price field"}), 502
 
         fill_price = float(fills[0]["price"])
+        # TradingView alerts in this project always target a fixed 2% take-profit.
         tp_price = fill_price * 1.02
 
         # Binance is strict with decimal places.
