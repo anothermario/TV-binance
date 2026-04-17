@@ -92,7 +92,16 @@ Set the **Message** body to:
 - `symbol` — the Binance trading pair (e.g. `BTCUSDT`); `{{ticker}}` fills it automatically
 - `quantity` — exact base-asset quantity to trade
 
-Use `GET /` as a health check endpoint for Render.
+---
+
+## Render deployment
+
+- Use `GET /` as the health check endpoint so Render can confirm the service is up.
+- Start the app with:
+
+```bash
+gunicorn --bind 0.0.0.0:10000 webhook:app
+```
 
 ---
 
