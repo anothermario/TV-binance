@@ -65,7 +65,7 @@ def webhook():
     data = request.get_json(silent=True)
 
     missing_env = get_missing_env_vars()
-    missing_runtime_env = [name for name in missing_env if name != "WEBHOOK_PASSPHRASE"]
+    missing_binance_env = [name for name in missing_env if name != "WEBHOOK_PASSPHRASE"]
     if "WEBHOOK_PASSPHRASE" in missing_env:
         logger.error("Missing required webhook configuration")
         return jsonify({"status": "error", "message": "Server configuration error"}), 500
@@ -74,7 +74,7 @@ def webhook():
     if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE):
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    if missing_runtime_env:
+    if missing_binance_env:
         logger.error("Missing required Binance configuration")
         return jsonify({"status": "error", "message": "Server configuration error"}), 500
 
@@ -106,14 +106,13 @@ def webhook():
 
         # 3. Calculate 2% Take Profit
         fills = buy_order.get("fills") or []
-        if not fills:
-            logger.error("Buy order returned no fill data: %s", buy_order)
-            return jsonify({"status": "error", "message": "Invalid order response from exchange"}), 500
-        if "price" not in fills[0]:
+        fill = fills[0] if fills else {}
+        fill_price_value = fill.get("price")
+        if fill_price_value is None:
             logger.error("Buy order fill missing price field: %s", buy_order)
             return jsonify({"status": "error", "message": "Invalid order response from exchange"}), 500
 
-        fill_price = float(fills[0]["price"])
+        fill_price = float(fill_price_value)
         # TradingView alerts in this project always target a fixed 2% take-profit.
         tp_price = fill_price * 1.02
 
@@ -133,13 +132,13 @@ def webhook():
         return jsonify({"status": "success", "buy": fill_price, "tp": tp_price_rounded}), 200
 
     except LookupError as error:
-        logger.exception("Price precision lookup failed: %s", error)
+        logger.exception("Price precision lookup failed")
         return jsonify({"status": "error", "message": "Unable to determine valid price precision"}), 500
     except BinanceAPIException as error:
         logger.exception("Binance API error while processing webhook")
         return jsonify({"status": "error", "message": "Binance API error"}), 400
     except Exception as error:
-        logger.exception("Unexpected webhook error: %s", error)
+        logger.exception("Unexpected webhook error")
         return jsonify({"status": "error", "message": "Internal error"}), 500
 
 
