@@ -18,6 +18,7 @@ API_SECRET = os.getenv("BINANCE_API_SECRET")
 WEBHOOK_PASSPHRASE = os.getenv("WEBHOOK_PASSPHRASE")
 
 client = None
+symbol_info_cache = {}
 
 
 def get_client():
@@ -40,7 +41,10 @@ def get_missing_env_vars():
 
 
 def round_take_profit_price(symbol, price):
-    symbol_info = get_client().get_symbol_info(symbol)
+    symbol_info = symbol_info_cache.get(symbol)
+    if symbol_info is None:
+        symbol_info = get_client().get_symbol_info(symbol)
+        symbol_info_cache[symbol] = symbol_info
     if symbol_info:
         for rule in symbol_info.get("filters", []):
             if rule.get("filterType") == "PRICE_FILTER":
@@ -61,20 +65,17 @@ def webhook():
     data = request.get_json(silent=True)
 
     missing_env = get_missing_env_vars()
-    if missing_env:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": f"Missing environment variables: {', '.join(missing_env)}",
-                }
-            ),
-            500,
-        )
+    if "WEBHOOK_PASSPHRASE" in missing_env:
+        logger.error("Missing required environment variables: %s", ", ".join(missing_env))
+        return jsonify({"status": "error", "message": "Server configuration error"}), 500
 
     # 1. Verification
     if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE):
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    if missing_env:
+        logger.error("Missing required environment variables: %s", ", ".join(missing_env))
+        return jsonify({"status": "error", "message": "Server configuration error"}), 500
 
     try:
         symbol = data.get("symbol")
@@ -103,10 +104,10 @@ def webhook():
         fills = buy_order.get("fills") or []
         if not fills:
             logger.error("Buy order returned no fill data: %s", buy_order)
-            return jsonify({"status": "error", "message": "No fill data returned"}), 502
+            return jsonify({"status": "error", "message": "Invalid order response from exchange"}), 500
         if "price" not in fills[0]:
             logger.error("Buy order fill missing price field: %s", buy_order)
-            return jsonify({"status": "error", "message": "Fill data missing price field"}), 502
+            return jsonify({"status": "error", "message": "Invalid order response from exchange"}), 500
 
         fill_price = float(fills[0]["price"])
         # TradingView alerts in this project always target a fixed 2% take-profit.
@@ -129,7 +130,7 @@ def webhook():
 
     except LookupError as error:
         logger.exception("Price precision lookup failed: %s", error)
-        return jsonify({"status": "error", "message": "Unable to determine valid price precision"}), 502
+        return jsonify({"status": "error", "message": "Unable to determine valid price precision"}), 500
     except BinanceAPIException as error:
         logger.exception("Binance API error while processing webhook")
         return jsonify({"status": "error", "message": "Binance API error"}), 400
