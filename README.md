@@ -108,6 +108,8 @@ gunicorn --bind 0.0.0.0:10000 webhook:app
 ## Security notes
 
 - **Never** commit your `.env` file — it is listed in `.gitignore`.
+- The webhook passphrase is checked with a constant-time comparison to reduce
+  timing-attack risk.
 - Restrict your Binance API key to **Spot trading only** and whitelist your
   server's IP address in the Binance API settings.
 

@@ -65,16 +65,17 @@ def webhook():
     data = request.get_json(silent=True)
 
     missing_env = get_missing_env_vars()
+    missing_runtime_env = [name for name in missing_env if name != "WEBHOOK_PASSPHRASE"]
     if "WEBHOOK_PASSPHRASE" in missing_env:
-        logger.error("Missing required environment variables: %s", ", ".join(missing_env))
+        logger.error("Missing required webhook configuration")
         return jsonify({"status": "error", "message": "Server configuration error"}), 500
 
     # 1. Verification
     if not data or not hmac.compare_digest(data.get("passphrase", ""), WEBHOOK_PASSPHRASE):
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    if missing_env:
-        logger.error("Missing required environment variables: %s", ", ".join(missing_env))
+    if missing_runtime_env:
+        logger.error("Missing required Binance configuration")
         return jsonify({"status": "error", "message": "Server configuration error"}), 500
 
     try:
@@ -87,7 +88,10 @@ def webhook():
             return jsonify({"status": "error", "message": "Missing quantity"}), 400
 
         symbol = symbol.upper()
-        quantity = float(quantity)
+        try:
+            quantity = float(quantity)
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "Invalid quantity"}), 400
         if quantity <= 0:
             return jsonify({"status": "error", "message": "Invalid quantity"}), 400
 
