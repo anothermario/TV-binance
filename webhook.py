@@ -136,6 +136,15 @@ def get_missing_env_vars():
     ]
 
 
+def mask_key(key):
+    """Return first 4 and last 4 characters separated by '...', or None if empty."""
+    if not key:
+        return None
+    if len(key) <= 8:
+        return "***"
+    return key[:4] + "..." + key[-4:]
+
+
 def round_take_profit_price(symbol, price):
     symbol_info = symbol_info_cache.get(symbol)
     if symbol_info is None:
@@ -394,7 +403,14 @@ def stats():
 
 @app.route("/settings", methods=["GET"])
 def settings():
-    return render_template("settings.html", active="settings")
+    return render_template(
+        "settings.html",
+        active="settings",
+        api_key_display=mask_key(API_KEY),
+        api_secret_display=mask_key(API_SECRET),
+        webhook_passphrase_display=mask_key(WEBHOOK_PASSPHRASE),
+        db_path=os.getenv("DB_PATH", "trades.db"),
+    )
 
 
 # ---------------------------------------------------------------------------

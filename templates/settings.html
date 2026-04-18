@@ -8,15 +8,56 @@
 <div class="card mb-4">
   <div class="card-header fw-semibold">Bot Configuration</div>
   <div class="card-body">
-    <p class="text-muted mb-0">
-      Bot settings are managed via environment variables. Set the following variables to configure the bot:
+    <p class="mb-3">
+      Bot settings are managed via environment variables. Current configuration status:
     </p>
-    <ul class="mt-3 text-muted">
-      <li><code>BINANCE_API_KEY</code> — Your Binance API key</li>
-      <li><code>BINANCE_API_SECRET</code> — Your Binance API secret</li>
-      <li><code>WEBHOOK_PASSPHRASE</code> — Passphrase used to authenticate TradingView webhook alerts</li>
-      <li><code>DB_PATH</code> — Path to the SQLite database file (default: <code>trades.db</code>)</li>
-    </ul>
+    <div class="d-flex flex-column gap-3">
+
+      <div class="setting-item">
+        <div class="setting-label">BINANCE_API_KEY</div>
+        <div class="setting-desc">Your Binance API key</div>
+        <div class="mt-1">
+          {% if api_key_display %}
+            <span class="setting-value">{{ api_key_display }}</span>
+          {% else %}
+            <span class="setting-missing">Missing/Not Set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-label">BINANCE_API_SECRET</div>
+        <div class="setting-desc">Your Binance API secret</div>
+        <div class="mt-1">
+          {% if api_secret_display %}
+            <span class="setting-value">{{ api_secret_display }}</span>
+          {% else %}
+            <span class="setting-missing">Missing/Not Set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-label">WEBHOOK_PASSPHRASE</div>
+        <div class="setting-desc">Passphrase used to authenticate TradingView webhook alerts</div>
+        <div class="mt-1">
+          {% if webhook_passphrase_display %}
+            <span class="setting-value">{{ webhook_passphrase_display }}</span>
+          {% else %}
+            <span class="setting-missing">Missing/Not Set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-label">DB_PATH</div>
+        <div class="setting-desc">Path to the SQLite database file</div>
+        <div class="mt-1">
+          <span class="setting-value">{{ db_path }}</span>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 {% endblock %}
