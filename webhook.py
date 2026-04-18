@@ -52,8 +52,9 @@ def init_db():
 
 @contextmanager
 def _db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
     try:
         yield conn
         conn.commit()
@@ -89,7 +90,14 @@ def sync_open_trades():
             binance_client = get_client()
             order = binance_client.get_order(symbol=row["symbol"], orderId=row["sell_order_id"])
             if order.get("status") == "FILLED":
-                sell_price = float(order.get("price") or row["tp_price"])
+                # Prefer average fill price (cummulativeQuoteQty / executedQty)
+                # over the limit price, which may differ from the actual execution.
+                executed_qty = float(order.get("executedQty") or 0)
+                cumulative_quote = float(order.get("cummulativeQuoteQty") or 0)
+                if executed_qty > 0 and cumulative_quote > 0:
+                    sell_price = cumulative_quote / executed_qty
+                else:
+                    sell_price = float(order.get("price") or row["tp_price"])
                 profit = (sell_price - row["buy_price"]) * row["quantity"]
                 close_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 with _db() as conn:
