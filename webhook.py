@@ -24,6 +24,9 @@ DB_PATH = os.getenv("DB_PATH", "trades.db")
 
 client = None
 symbol_info_cache = {}
+# In-memory store of recent trades for the current server session.
+# Data is intentionally ephemeral and will be reset on restart.
+trade_history = []
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -154,7 +157,28 @@ def round_take_profit_price(symbol, price):
 
 @app.route("/", methods=["GET"])
 def health_check():
-    return "Bot is running", 200
+    sync_open_trades()
+    with _db() as conn:
+        open_trades = [dict(r) for r in conn.execute(
+            "SELECT * FROM trades WHERE status = 'open' ORDER BY buy_time DESC"
+        ).fetchall()]
+        closed_trades = [dict(r) for r in conn.execute(
+            "SELECT * FROM trades WHERE status = 'closed' ORDER BY close_time DESC"
+        ).fetchall()]
+
+    total_profit = sum(t["profit"] or 0 for t in closed_trades)
+    wins = sum(1 for t in closed_trades if (t["profit"] or 0) > 0)
+    win_rate = round(wins / len(closed_trades) * 100) if closed_trades else 0
+
+    return render_template(
+        "dashboard.html",
+        active="dashboard",
+        trades=trade_history,
+        open_trades=open_trades,
+        closed_trades=closed_trades,
+        total_profit=total_profit,
+        win_rate=win_rate,
+    )
 
 
 @app.route("/webhook", methods=["POST"])
@@ -235,6 +259,14 @@ def webhook():
             tp_price=float(tp_price_rounded),
             sell_order_id=str(sell_order.get("orderId", "")),
         )
+
+        # 6. Record in in-memory trade history for the dashboard
+        trade_history.append({
+            "symbol": symbol,
+            "price": fill_price,
+            "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "type": "BUY",
+        })
 
         return jsonify({"status": "success", "buy": fill_price, "tp": tp_price_rounded}), 200
 
@@ -358,6 +390,11 @@ def stats():
         monthly_total=monthly_total,
         monthly_count=monthly_count,
     )
+
+
+@app.route("/settings", methods=["GET"])
+def settings():
+    return render_template("settings.html", active="settings")
 
 
 # ---------------------------------------------------------------------------

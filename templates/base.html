@@ -31,8 +31,10 @@
       </button>
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="/">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link {% if active == 'trade-history' %}active{% endif %}" href="/dashboard">Trade History</a></li>
           <li class="nav-item"><a class="nav-link {% if active == 'stats' %}active{% endif %}" href="/stats">Stats</a></li>
+          <li class="nav-item"><a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a></li>
         </ul>
       </div>
     </div>
