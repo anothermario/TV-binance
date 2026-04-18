@@ -24,6 +24,8 @@ DB_PATH = os.getenv("DB_PATH", "trades.db")
 
 client = None
 symbol_info_cache = {}
+# In-memory store of recent trades for the current server session.
+# Data is intentionally ephemeral and will be reset on restart.
 trade_history = []
 
 # ---------------------------------------------------------------------------
@@ -388,6 +390,11 @@ def stats():
         monthly_total=monthly_total,
         monthly_count=monthly_count,
     )
+
+
+@app.route("/settings", methods=["GET"])
+def settings():
+    return render_template("settings.html", active="settings")
 
 
 # ---------------------------------------------------------------------------
