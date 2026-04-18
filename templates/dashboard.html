@@ -36,6 +36,35 @@
   </div>
 </div>
 
+<!-- Recent Trades (in-memory) -->
+{% if trades %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between">
+    <span class="fw-semibold">Recent Trades (This Session)</span>
+    <span class="badge badge-open rounded-pill">{{ trades | length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr>
+          <th>Symbol</th><th>Type</th><th>Price</th><th>Time</th>
+        </tr></thead>
+        <tbody>
+        {% for t in trades %}
+        <tr>
+          <td class="fw-semibold">{{ t.symbol }}</td>
+          <td><span class="badge badge-open">{{ t.type }}</span></td>
+          <td>{{ "%.6g" | format(t.price) }}</td>
+          <td class="text-muted small">{{ t.time }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Open Trades -->
 <div class="card mb-4">
   <div class="card-header d-flex justify-content-between">
