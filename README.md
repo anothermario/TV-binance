@@ -1,9 +1,10 @@
 # TV-binance
 
-A lightweight webhook bridge that forwards TradingView alerts to Binance.
-When a TradingView alert fires, the bridge executes a **market buy** on Binance
-and immediately places a **limit sell** at a fixed 2% take-profit above the
-fill price.
+A TradingView → Binance webhook bridge with a built-in trade dashboard and
+profit stats page.  When a TradingView alert fires the bridge executes a
+**market buy** on Binance, places a **limit sell** at a fixed 2% take-profit
+above the fill price, and persists the trade in a local SQLite database so it
+can be tracked in the UI.
 
 ---
 
@@ -11,12 +12,18 @@ fill price.
 
 ```
 TradingView alert  ──POST /webhook──►  Flask server  ──►  Binance API
+                                            │
+                                       SQLite DB
+                                            │
+                               GET /dashboard  GET /stats
 ```
 
 1. You configure a TradingView alert whose "Message" body is a JSON payload.
 2. TradingView sends an HTTP POST to your server's `/webhook` endpoint.
 3. The bridge validates the passphrase, executes the market buy, then places
-   a GTC limit sell at `fill_price × 1.02`.
+   a GTC limit sell at `fill_price × 1.02`, and saves the trade to the DB.
+4. Visit `/dashboard` to see open trades and finished transactions.
+5. Visit `/stats` for daily, weekly, and monthly profit breakdowns.
 
 ---
 
@@ -52,6 +59,7 @@ cp .env.example .env
 | `BINANCE_API_SECRET` | Binance API secret | *(required)* |
 | `WEBHOOK_PASSPHRASE` | Secret phrase shared with TradingView | *(required)* |
 | `PORT` | Port the server listens on | `10000` |
+| `DB_PATH` | Path for the SQLite trade database | `trades.db` |
 
 ### 3 — Run the server
 
@@ -102,6 +110,20 @@ Set the **Message** body to:
 ```bash
 gunicorn --bind 0.0.0.0:10000 webhook:app
 ```
+
+- On Render, set `DB_PATH` to a path inside a **persistent disk** (e.g.
+  `/data/trades.db`) so the database survives deploys.
+
+---
+
+## Pages
+
+| URL | Description |
+|---|---|
+| `GET /` | Health check — returns `Bot is running` |
+| `POST /webhook` | TradingView alert receiver |
+| `GET /dashboard` | Open trades + finished transactions table |
+| `GET /stats` | Daily / weekly / monthly profit breakdown |
 
 ---
 

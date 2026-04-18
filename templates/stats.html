@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Stats — TV-Binance{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">Profit Stats</h2>
+  <small class="text-muted">Based on closed trades</small>
+</div>
+
+<!-- Period summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">Today</div>
+      <div class="display-6 {% if daily_total >= 0 %}text-profit{% else %}text-loss{% endif %}">
+        {% if daily_total >= 0 %}+{% endif %}{{ "%.4f" | format(daily_total) }}
+      </div>
+      <div class="text-muted small">{{ daily_count }} trade{{ 's' if daily_count != 1 }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">This Week</div>
+      <div class="display-6 {% if weekly_total >= 0 %}text-profit{% else %}text-loss{% endif %}">
+        {% if weekly_total >= 0 %}+{% endif %}{{ "%.4f" | format(weekly_total) }}
+      </div>
+      <div class="text-muted small">{{ weekly_count }} trade{{ 's' if weekly_count != 1 }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">This Month</div>
+      <div class="display-6 {% if monthly_total >= 0 %}text-profit{% else %}text-loss{% endif %}">
+        {% if monthly_total >= 0 %}+{% endif %}{{ "%.4f" | format(monthly_total) }}
+      </div>
+      <div class="text-muted small">{{ monthly_count }} trade{{ 's' if monthly_count != 1 }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Daily breakdown (last 7 days) -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Daily Breakdown — Last 7 Days</div>
+  <div class="card-body p-0">
+    {% if daily_rows %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr><th>Date</th><th>Trades</th><th>Profit</th></tr></thead>
+        <tbody>
+        {% for row in daily_rows %}
+        <tr>
+          <td>{{ row.period }}</td>
+          <td>{{ row.count }}</td>
+          <td class="{% if row.profit >= 0 %}text-profit{% else %}text-loss{% endif %}">
+            {% if row.profit >= 0 %}+{% endif %}{{ "%.4f" | format(row.profit) }}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-4 mb-0">No data for the last 7 days.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Weekly breakdown (last 8 weeks) -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Weekly Breakdown — Last 8 Weeks</div>
+  <div class="card-body p-0">
+    {% if weekly_rows %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr><th>Week starting</th><th>Trades</th><th>Profit</th></tr></thead>
+        <tbody>
+        {% for row in weekly_rows %}
+        <tr>
+          <td>{{ row.period }}</td>
+          <td>{{ row.count }}</td>
+          <td class="{% if row.profit >= 0 %}text-profit{% else %}text-loss{% endif %}">
+            {% if row.profit >= 0 %}+{% endif %}{{ "%.4f" | format(row.profit) }}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-4 mb-0">No data for the last 8 weeks.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Monthly breakdown (last 12 months) -->
+<div class="card">
+  <div class="card-header fw-semibold">Monthly Breakdown — Last 12 Months</div>
+  <div class="card-body p-0">
+    {% if monthly_rows %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr><th>Month</th><th>Trades</th><th>Profit</th></tr></thead>
+        <tbody>
+        {% for row in monthly_rows %}
+        <tr>
+          <td>{{ row.period }}</td>
+          <td>{{ row.count }}</td>
+          <td class="{% if row.profit >= 0 %}text-profit{% else %}text-loss{% endif %}">
+            {% if row.profit >= 0 %}+{% endif %}{{ "%.4f" | format(row.profit) }}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-4 mb-0">No data for the last 12 months.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
