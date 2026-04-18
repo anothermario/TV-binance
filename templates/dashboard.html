@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — TV-Binance{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">Dashboard</h2>
+  <small class="text-muted">Auto-refreshes every 30 s</small>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">Open Trades</div>
+      <div class="display-6">{{ open_trades | length }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">Closed Trades</div>
+      <div class="display-6">{{ closed_trades | length }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">Total Profit</div>
+      <div class="display-6 {% if total_profit >= 0 %}text-profit{% else %}text-loss{% endif %}">
+        {{ "%.4f" | format(total_profit) }}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center stat-card p-3">
+      <div class="text-muted small mb-1">Win Rate</div>
+      <div class="display-6">{{ win_rate }}%</div>
+    </div>
+  </div>
+</div>
+
+<!-- Open Trades -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between">
+    <span class="fw-semibold">Open Trades</span>
+    <span class="badge badge-open rounded-pill">{{ open_trades | length }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if open_trades %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr>
+          <th>Symbol</th><th>Qty</th><th>Buy Price</th><th>TP Price</th>
+          <th>Unrealised&nbsp;(est.)</th><th>Opened</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+        {% for t in open_trades %}
+        <tr>
+          <td class="fw-semibold">{{ t.symbol }}</td>
+          <td>{{ t.quantity }}</td>
+          <td>{{ "%.6g" | format(t.buy_price) }}</td>
+          <td>{{ "%.6g" | format(t.tp_price) }}</td>
+          <td class="text-profit">+{{ "%.4f" | format((t.tp_price - t.buy_price) * t.quantity) }}</td>
+          <td class="text-muted small">{{ t.buy_time }}</td>
+          <td><span class="badge badge-open">open</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-4 mb-0">No open trades.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Finished Transactions -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between">
+    <span class="fw-semibold">Finished Transactions</span>
+    <span class="badge badge-closed rounded-pill">{{ closed_trades | length }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if closed_trades %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr>
+          <th>Symbol</th><th>Qty</th><th>Buy Price</th><th>Sell Price</th>
+          <th>Profit</th><th>Opened</th><th>Closed</th>
+        </tr></thead>
+        <tbody>
+        {% for t in closed_trades %}
+        <tr>
+          <td class="fw-semibold">{{ t.symbol }}</td>
+          <td>{{ t.quantity }}</td>
+          <td>{{ "%.6g" | format(t.buy_price) }}</td>
+          <td>{{ "%.6g" | format(t.tp_price) }}</td>
+          <td class="{% if t.profit >= 0 %}text-profit{% else %}text-loss{% endif %}">
+            {% if t.profit >= 0 %}+{% endif %}{{ "%.4f" | format(t.profit) }}
+          </td>
+          <td class="text-muted small">{{ t.buy_time }}</td>
+          <td class="text-muted small">{{ t.close_time }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-4 mb-0">No finished transactions yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>setTimeout(() => location.reload(), 30000);</script>
+{% endblock %}
