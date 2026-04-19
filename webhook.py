@@ -208,17 +208,19 @@ def settings():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
+    print(f"RAW DATA RECEIVED: {data}")
 
     if not data or data.get('passphrase') != WEBHOOK_PASSPHRASE:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
     symbol = data.get('symbol', 'UNKNOWN').upper()
     qty = data.get('quantity', 0)
-    raw_price = data.get('price') or data.get('close') or 0
+    raw_price = data.get('price') or data.get('close') or data.get('value') or 0
     entry_price = round(float(raw_price), 2)
 
     if entry_price == 0:
-        print(f"WARNING: Received price 0 for {symbol}. Check TradingView placeholders.")
+        print("CRITICAL: Price was 0. Trade not added.")
+        return jsonify({"status": "error", "reason": "zero_price"}), 400
 
     target_price = round(entry_price * 1.02, 2)
 
