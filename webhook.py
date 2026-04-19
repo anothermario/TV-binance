@@ -16,6 +16,7 @@ BASE_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="10">
     <title>Paper Trading Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -213,7 +214,12 @@ def webhook():
 
     symbol = data.get('symbol', 'UNKNOWN').upper()
     qty = data.get('quantity', 0)
-    entry_price = float(data.get('price', 0))
+    raw_price = data.get('price') or data.get('close') or 0
+    entry_price = round(float(raw_price), 2)
+
+    if entry_price == 0:
+        print(f"WARNING: Received price 0 for {symbol}. Check TradingView placeholders.")
+
     target_price = round(entry_price * 1.02, 2)
 
     new_trade = {
